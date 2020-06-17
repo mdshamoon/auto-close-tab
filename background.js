@@ -22,6 +22,23 @@ function call(tab) {
 }
 
 setInterval(() => {
+  chrome.tabs.query({ active: true }, function (tabArray) {
+    initialTime = initialTime.map((tabs) => {
+      tabArray.forEach((element) => {
+        if (element.id == tabs.id) {
+          const date = new Date();
+          const timeInSeconds = date.getTime();
+
+          tabs.startTime = timeInSeconds;
+
+          return tabs;
+        }
+      });
+
+      return tabs;
+    });
+  });
+
   const date = new Date();
   const timeInSeconds = date.getTime();
   initialTime = initialTime.filter((tabs) => {
@@ -31,19 +48,6 @@ setInterval(() => {
       return false;
     }
     return true;
-  });
-
-  chrome.tabs.query({ active: true }, function (tabArray) {
-    initialTime = initialTime.map((tabs) => {
-      if (tabArray[0].id === tabs.id) {
-        const date = new Date();
-        const timeInSeconds = date.getTime();
-        tabs.startTime = timeInSeconds;
-        return tabs;
-      }
-
-      return tabs;
-    });
   });
 }, 50000);
 
