@@ -1,64 +1,35 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-let initialTime = [];
-/**
- *
- *
- * Get the current URL.
- *
- * @param {function(string)} callback called when the URL of the current tab
- *   is found.
- */
-let closingTime = 600000;
+// create alarm instead of setTimeout
 
-chrome.tabs.onCreated.addListener(call);
+chrome.alarms.create({ when: Date.now() + 50000 });
 
-function call(tab) {
+// get a list of created time of all tabs
+
+chrome.tabs.onCreated.addListener(addTabToStorage);
+
+const getCurrentTime = () => {
   const date = new Date();
-  const timeInSeconds = date.getTime();
-  const payload = { id: tab.id, startTime: timeInSeconds };
-  initialTime.push(payload);
+  return date.getTime();
+};
+
+function addTabToStorage(tab) {
+  const payload = { id: tab.id, startTime: getCurrentTime() };
+  chrome.storage.local.get(["initialTime"], function (result) {
+    const initialTime = result.initialTime;
+    if (!initialTime) {
+      chrome.storage.local.set({ initialTime: [payload] });
+    }
+    initialTime.push(payload);
+    chrome.storage.local.set({ initialTime });
+  });
 }
 
-setInterval(() => {
-  chrome.tabs.query({ active: true }, function (tabArray) {
-    initialTime = initialTime.map((tabs) => {
-      tabArray.forEach((element) => {
-        if (element.id == tabs.id) {
-          const date = new Date();
-          const timeInSeconds = date.getTime();
-
-          tabs.startTime = timeInSeconds;
-
-          return tabs;
-        }
-      });
-
-      return tabs;
-    });
-  });
-
-  const date = new Date();
-  const timeInSeconds = date.getTime();
-  initialTime = initialTime.filter((tabs) => {
-    let timeDifference = timeInSeconds - tabs.startTime;
-    if (timeDifference > closingTime) {
-      chrome.tabs.remove(tabs.id);
-      return false;
-    }
-    return true;
-  });
-}, 50000);
-
+// reset start time when moved back to the tab
 chrome.tabs.onActivated.addListener(callback);
 
-function callback(info) {
+async function callback(info) {
   initialTime.map((tabs) => {
     if (info.tabId === tabs.id) {
-      const date = new Date();
-      const timeInSeconds = date.getTime();
-      tabs.startTime = timeInSeconds;
+      tabs.startTime = getCurrentTime();
       return tabs;
     }
 
@@ -66,6 +37,53 @@ function callback(info) {
   });
 }
 
-chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
-  closingTime = request.time * 60000;
+// check at an interval of 50 seconds if the tab is inactive for the closing time
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  // get the time stored in local storage
+  chrome.storage.local.get(["time", "initialTime"], async function (result) {
+    let time = result.time;
+    let initialTime = result.initialTime || [];
+
+    // if time not set then set the time and assign default 5 seconds to closing time
+    if (!time) {
+      chrome.storage.local.set({ time: 5 });
+      time = 5;
+    }
+
+    let closingTime = time * 60000;
+
+    let urlMathcher = await chrome.tabs.query({
+      url: "https://meet.google.com/*",
+    });
+
+    let activeTabs = await chrome.tabs.query({ active: true });
+
+    const refreshTimingForTabs = [...activeTabs, ...urlMathcher];
+
+    initialTime = initialTime.map((tabs) => {
+      // check for current active tabs and reset its time to current
+      refreshTimingForTabs.forEach((element) => {
+        if (element.id == tabs.id) {
+          tabs.startTime = getCurrentTime();
+          return tabs;
+        }
+      });
+
+      return tabs;
+    });
+
+    const date = new Date();
+    const timeInSeconds = date.getTime();
+    initialTime = initialTime.filter((tabs) => {
+      let timeDifference = timeInSeconds - tabs.startTime;
+      if (timeDifference > closingTime) {
+        chrome.tabs.remove(tabs.id);
+        return false;
+      }
+      return true;
+    });
+  });
+
+  chrome.alarms.create({ when: Date.now() + 50000 });
 });
