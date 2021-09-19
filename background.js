@@ -24,16 +24,19 @@ function addTabToStorage(tab) {
 }
 
 // reset start time when moved back to the tab
-chrome.tabs.onActivated.addListener(callback);
+chrome.tabs.onActivated.addListener(resetStartTime);
 
-async function callback(info) {
-  initialTime.map((tabs) => {
-    if (info.tabId === tabs.id) {
-      tabs.startTime = getCurrentTime();
+async function resetStartTime(tab) {
+  chrome.storage.local.get(["initialTime"], function (result) {
+    const initialTime = result.initialTime;
+    initialTime.map((tabs) => {
+      if (tab.tabId === tabs.id) {
+        tabs.startTime = getCurrentTime();
+        return tabs;
+      }
       return tabs;
-    }
-
-    return tabs;
+    });
+    chrome.storage.local.set({ initialTime });
   });
 }
 
