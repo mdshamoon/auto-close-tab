@@ -81,7 +81,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     initialTime = initialTime.filter((tabs) => {
       let timeDifference = timeInSeconds - tabs.startTime;
       if (timeDifference > closingTime) {
-        chrome.tabs.remove(tabs.id);
+        const isTabPresent = await chrome.tabs.get(tabs.id);
+        if (isTabPresent) {
+          chrome.tabs.remove(tabs.id);
+        }
         return false;
       }
       return true;
